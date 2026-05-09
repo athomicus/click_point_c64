@@ -1,0 +1,1 @@
+# click_point_c64
