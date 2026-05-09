@@ -4,7 +4,8 @@
     "general": {
         "disk": "bmp", 
         "code": [
-            "projects/BITMAP_project/main.c"
+            "projects/BITMAP_project/main.c", 
+            "projects/BITMAP_project/objects.c"
         ], 
         "shared": [], 
         "charmap": [], 
@@ -28,12 +29,17 @@
             "networkDriver": "IP65(TCP/UDP)"
         }, 
         "Atari": {
-            "spriteFrames": "0", 
+            "spriteFrames": "14", 
             "spriteWidth": "8", 
-            "spriteHeight": "0", 
-            "bitmap": [], 
+            "spriteHeight": "21", 
+            "bitmap": [
+                "projects/BITMAP_project/scene3.png", 
+                "projects/BITMAP_project/home.png"
+            ], 
             "charset": [], 
-            "sprites": [], 
+            "sprites": [
+                "projects/BITMAP_project/sprajty12x21x14.png"
+            ], 
             "music": [], 
             "chunks": [], 
             "diskSize": "180KB", 
@@ -45,8 +51,8 @@
             "spriteWidth": "12", 
             "spriteHeight": "21", 
             "bitmap": [
-                "projects/BITMAP_project/scene1.png", 
-                "projects/BITMAP_project/scene3.png"
+                "projects/BITMAP_project/scene3.png", 
+                "projects/BITMAP_project/home.png"
             ], 
             "charset": [], 
             "sprites": [
