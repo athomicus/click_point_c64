@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>C64 Chunk Tool</title>
+<style>
+body{margin:0;font-family:monospace;background:#111;color:#ccc;display:flex;flex-direction:column;height:100vh;}
+header{background:#1c1b19;border-bottom:1px solid #333;padding:8px 14px;font-size:.9rem;color:#4f98a3;}
+.body{display:flex;flex:1;overflow:hidden;}
+#left{flex:1;padding:12px;display:flex;flex-direction:column;gap:8px;overflow:auto;}
+#right{width:260px;border-left:1px solid #333;padding:12px;display:flex;flex-direction:column;gap:8px;overflow-y:auto;}
+label[for=fi]{display:flex;align-items:center;justify-content:center;border:2px dashed #555;border-radius:4px;min-height:100px;cursor:pointer;color:#777;text-align:center;font-size:.82rem;padding:12px;}
+label[for=fi]:hover{border-color:#4f98a3;color:#4f98a3;}
+#fi{display:none;}
+#wrap{display:none;position:relative;line-height:0;}
+#ic{display:block;image-rendering:pixelated;max-width:100%;}
+#dc{position:absolute;top:0;left:0;cursor:crosshair;}
+.modetog{display:flex;border:1px solid #333;border-radius:4px;overflow:hidden;margin-bottom:8px;}
+.modetog button{flex:1;padding:8px 2px;font-size:.66rem;font-family:monospace;border:none;background:#1a1a1a;color:#777;cursor:pointer;}
+.modetog button.on{background:#4f98a3;color:#fff;}
+input[type=text],input[type=number]{width:100%;padding:5px 7px;background:#1a1a1a;border:1px solid #333;color:#ccc;font-family:monospace;font-size:.76rem;border-radius:3px;margin-bottom:6px;}
+.lbl{font-size:.62rem;color:#777;margin-bottom:2px;}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:6px;}
+h2{font-size:.62rem;color:#666;text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;border-bottom:1px solid #222;padding-bottom:4px;}
+.outbox{background:#1a1a1a;border:1px solid #333;border-radius:3px;padding:8px;font-size:.68rem;line-height:1.9;white-space:pre-wrap;min-height:48px;overflow-x:auto;}
+.kw{color:#fdab43;}.vl{color:#6daa45;}.cm{color:#555;}
+.btn{width:100%;margin-top:4px;padding:6px;font-size:.7rem;font-family:monospace;background:#4f98a3;color:#fff;border:none;border-radius:3px;cursor:pointer;}
+.btn.ok{background:#6daa45;}.btn.red{background:#8a2030;}
+.slist{display:flex;flex-direction:column;gap:3px;max-height:140px;overflow-y:auto;}
+.srow{font-size:.62rem;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:3px;padding:4px 7px;display:flex;gap:5px;align-items:center;}
+.sdot{width:8px;height:8px;border-radius:2px;flex-shrink:0;}
+.sdel{background:none;border:none;color:#c04060;cursor:pointer;}
+.inf{font-size:.62rem;color:#555;margin-top:4px;display:none;}
+.inf b{color:#4f98a3;}
+</style>
+</head>
+<body>
+<header>&#9619; C64 CHUNK TOOL</header>
+<div class="body">
+<div id="left">
+  <label for="fi">&#128194; Kliknij lub przeci&#261;gnij PNG / JPG</label>
+  <input id="fi" type="file" accept="image/*">
+  <div id="wrap"><canvas id="ic"></canvas><canvas id="dc"></canvas></div>
+  <div class="inf" id="inf">Mysz: <b id="mx">-</b>,<b id="my">-</b> &nbsp; <b id="sr">-</b></div>
+</div>
+<div id="right">
+  <div><h2>Nazwa</h2><div class="lbl">Przedmiot</div><input type="text" id="iname" value="Scroll"></div>
+  <div><h2>Tryb</h2>
+    <div class="modetog">
+      <button class="on" id="bchk" onclick="setMode('chunk')">CHUNK<br><small>tlo .chk</small></button>
+      <button id="bhit" onclick="setMode('hit')">HITBOX<br><small>klikniecie</small></button>
+    </div>
+  </div>
+  <div><h2>Snap C64</h2>
+    <div class="g2">
+      <div><div class="lbl">X,W (x4)</div><input type="number" id="sx" value="4" min="1"></div>
+      <div><div class="lbl">Y,H (x8)</div><input type="number" id="sy" value="8" min="1"></div>
+    </div>
+  </div>
+  <div><h2>Zaznaczone</h2>
+    <div class="slist" id="slist"><div style="font-size:.62rem;color:#555">brak</div></div>
+    <button class="btn red" onclick="clearAll()" style="margin-top:6px">&#10005; Wyczysc</button>
+  </div>
+  <div><h2>Builder .chk</h2><div class="outbox" id="ob"><span class="cm">// zaznacz CHUNK</span></div><button class="btn" id="cpb" onclick="cp('b')">Kopiuj</button></div>
+  <div><h2>Kod C</h2><div class="outbox" id="oc"><span class="cm">// zaznacz HITBOX</span></div><button class="btn" id="cpc" onclick="cp('c')">Kopiuj</button></div>
+</div>
+</div>
+<script>
+var COLS=['#4f98a3','#fdab43','#6daa45','#d163a7','#5591c7','#e8af34'];
+var mode='chunk',items=[],scale=1,imgW=160,imgH=200;
+var isDown=false,ox=0,oy=0;
+var ic=document.getElementById('ic');
+var dc=document.getElementById('dc');
+var ictx=ic.getContext('2d');
+var dctx=dc.getContext('2d');
+var lbl=document.querySelector('label[for=fi]');
+
+lbl.addEventListener('dragover',function(e){e.preventDefault();lbl.style.borderColor='#4f98a3';});
+lbl.addEventListener('dragleave',function(){lbl.style.borderColor='';});
+lbl.addEventListener('drop',function(e){
+  e.preventDefault();lbl.style.borderColor='';
+  if(e.dataTransfer&&e.dataTransfer.files[0])readFile(e.dataTransfer.files[0]);
+});
+
+document.getElementById('fi').addEventListener('change',function(){
+  if(this.files&&this.files[0])readFile(this.files[0]);
+});
+
+function readFile(file){
+  var r=new FileReader();
+  r.onload=function(e){
+    var img=new Image();
+    img.onload=function(){imgW=img.width;imgH=img.height;initCanvas(img);};
+    img.src=e.target.result;
+  };
+  r.readAsDataURL(file);
+}
+
+function initCanvas(img){
+  var avail=document.getElementById('left').clientWidth-24;
+  scale=Math.max(1,Math.min(5,Math.floor(avail/imgW)));
+  ic.width=dc.width=imgW*scale;
+  ic.height=dc.height=imgH*scale;
+  ictx.imageSmoothingEnabled=false;
+  ictx.drawImage(img,0,0,ic.width,ic.height);
+  lbl.style.display='none';
+  document.getElementById('wrap').style.display='block';
+  document.getElementById('inf').style.display='block';
+  redraw();
+}
+
+function setMode(m){
+  mode=m;
+  document.getElementById('bchk').className=m==='chunk'?'on':'';
+  document.getElementById('bhit').className=m==='hit'?'on':'';
+}
+
+function sf(v,s){return Math.floor(v/s)*s;}
+function sr2(v,s){return Math.round(v/s)*s;}
+function px2img(px,py){return{x:Math.floor(px/scale),y:Math.floor(py/scale)};}
+function makeRect(ax,ay,bx,by){
+  var SX=parseInt(document.getElementById('sx').value)||4;
+  var SY=parseInt(document.getElementById('sy').value)||8;
+  var p1=px2img(Math.min(ax,bx),Math.min(ay,by));
+  var p2=px2img(Math.max(ax,bx),Math.max(ay,by));
+  var rx=sf(p1.x,SX),ry=sf(p1.y,SY);
+  return{x:rx,y:ry,w:Math.max(SX,sr2(p2.x-rx,SX)),h:Math.max(SY,sr2(p2.y-ry,SY))};
+}
+
+dc.onmousedown=function(e){var r=dc.getBoundingClientRect();ox=e.clientX-r.left;oy=e.clientY-r.top;isDown=true;};
+dc.onmousemove=function(e){
+  var r=dc.getBoundingClientRect();
+  var cx=e.clientX-r.left,cy=e.clientY-r.top;
+  var p=px2img(cx,cy);
+  document.getElementById('mx').textContent=p.x;
+  document.getElementById('my').textContent=p.y;
+  if(!isDown)return;
+  var rect=makeRect(ox,oy,cx,cy);
+  document.getElementById('sr').textContent='['+rect.x+','+rect.y+','+rect.w+','+rect.h+']';
+  redraw(rect);
+};
+dc.onmouseup=function(e){
+  if(!isDown)return;isDown=false;
+  var r=dc.getBoundingClientRect();
+  var cx=e.clientX-r.left,cy=e.clientY-r.top;
+  var SX=parseInt(document.getElementById('sx').value)||4;
+  var SY=parseInt(document.getElementById('sy').value)||8;
+  var rect=makeRect(ox,oy,cx,cy);
+  if(rect.w<SX||rect.h<SY)return;
+  var name=document.getElementById('iname').value.trim()||'Item';
+  var it=null;
+  for(var i=0;i<items.length;i++){if(items[i].name===name){it=items[i];break;}}
+  if(!it){it={name:name,chunk:null,hit:null,color:COLS[items.length%COLS.length]};items.push(it);}
+  it[mode]=rect;
+  redraw();updateUI();
+};
+dc.onmouseleave=function(){isDown=false;};
+
+function redraw(live){
+  dctx.clearRect(0,0,dc.width,dc.height);
+  for(var i=0;i<items.length;i++){
+    if(items[i].chunk)drawR(items[i].chunk,items[i].color,0.35,false);
+    if(items[i].hit)drawR(items[i].hit,'#ff5555',0.22,true);
+  }
+  if(live){
+    var col=mode==='chunk'?'#4f98a3':'#ff6666';
+    dctx.strokeStyle=col;dctx.lineWidth=2;dctx.setLineDash([4,3]);
+    dctx.strokeRect(live.x*scale,live.y*scale,live.w*scale,live.h*scale);
+    dctx.setLineDash([]);
+    dctx.fillStyle=col+'28';
+    dctx.fillRect(live.x*scale,live.y*scale,live.w*scale,live.h*scale);
+    dctx.fillStyle=col;dctx.font=Math.max(9,scale*2)+'px monospace';
+    dctx.fillText(live.w+'x'+live.h,live.x*scale+2,live.y*scale>14?live.y*scale-3:live.y*scale+13);
+  }
+}
+function drawR(r,col,a,dash){
+  dctx.strokeStyle=col;dctx.lineWidth=2;dctx.setLineDash(dash?[3,3]:[]);
+  dctx.strokeRect(r.x*scale,r.y*scale,r.w*scale,r.h*scale);
+  dctx.setLineDash([]);
+  var ah=Math.round(a*255).toString(16);if(ah.length<2)ah='0'+ah;
+  dctx.fillStyle=col+ah;
+  dctx.fillRect(r.x*scale,r.y*scale,r.w*scale,r.h*scale);
+  dctx.fillStyle='rgba(255,255,255,.9)';dctx.font=Math.max(8,scale*1.8)+'px monospace';
+  dctx.fillText('['+r.x+','+r.y+','+r.w+','+r.h+']',r.x*scale+2,r.y*scale+Math.max(10,scale*2));
+}
+
+function removeItem(i){items.splice(i,1);redraw();updateUI();}
+function clearAll(){items=[];redraw();updateUI();}
+
+function updateUI(){
+  var sl=document.getElementById('slist');
+  if(!items.length){sl.innerHTML='<div style="font-size:.62rem;color:#555">brak</div>';}
+  else{
+    var h='';
+    for(var i=0;i<items.length;i++){
+      var it=items[i];
+      h+='<div class="srow"><div class="sdot" style="background:'+it.color+'"></div><div style="flex:1"><b>'+it.name+'</b><br>CHK:'+(it.chunk?'['+it.chunk.x+','+it.chunk.y+','+it.chunk.w+','+it.chunk.h+']':'brak')+' HIT:'+(it.hit?'['+it.hit.x+','+it.hit.y+','+it.hit.w+','+it.hit.h+']':'brak')+'</div><button class="sdel" onclick="removeItem('+i+')">&#10005;</button></div>';
+    }
+    sl.innerHTML=h;
+  }
+  var bl='';
+  for(var i=0;i<items.length;i++){
+    if(!items[i].chunk)continue;
+    var c=items[i].chunk,n=items[i].name.toLowerCase().replace(/ /g,'-');
+    if(bl)bl+='\n';
+    bl+='<span class="kw">\'01A.png\'</span>, <span class="vl">\''+n+'.chk\'</span>, [<span class="vl">'+c.x+', '+c.y+', '+c.w+', '+c.h+'</span>]';
+  }
+  document.getElementById('ob').innerHTML=bl||'<span class="cm">// zaznacz CHUNK</span>';
+  var cl='';
+  for(var i=0;i<items.length;i++){
+    if(!items[i].chunk)continue;
+    var n=items[i].name.toLowerCase().replace(/ /g,'-');
+    cl+='<span class="kw">LoadChunk</span>(&amp;items[<span class="vl">'+i+'</span>].chunk, <span class="vl">"'+n+'.chk"</span>);\n';
+  }
+  if(cl)cl+='\n';
+  cl+='SceneItem items[<span class="vl">'+items.length+'</span>] = {\n';
+  for(var i=0;i<items.length;i++){
+    var h2=items[i].hit,sep=i<items.length-1?',':'';
+    cl+=h2?'  { <span class="vl">'+h2.x+', '+h2.y+', '+h2.w+', '+h2.h+'</span>, 1, <span class="vl">"'+items[i].name+'"</span>, 0 }'+sep+'\n':'  { <span class="cm">/* brak hitbox */</span> }'+sep+'\n';
+  }
+  cl+='};';
+  document.getElementById('oc').innerHTML=items.length?cl:'<span class="cm">// zaznacz HITBOX</span>';
+}
+
+function cp(w){
+  var el=document.getElementById(w==='b'?'ob':'oc');
+  var btn=document.getElementById(w==='b'?'cpb':'cpc');
+  navigator.clipboard.writeText(el.innerText).then(function(){
+    btn.textContent='OK';btn.className='btn ok';
+    setTimeout(function(){btn.textContent='Kopiuj';btn.className='btn';},1400);
+  });
+}
+</script>
+</body>
+</html>
